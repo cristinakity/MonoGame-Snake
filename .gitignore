@@ -1,0 +1,20 @@
+# Ignore build output files
+/bin/
+/obj/
+Content/bin/
+Content/obj/
+
+# Ignore NuGet packages
+/packages/
+
+# Ignore user-specific files
+*.user
+
+# Ignore Visual Studio files
+.vs/
+*.suo
+*.userprefs
+*.vscode/
+*.vssscc
+*.vspscc
+*.sln.docstates
