@@ -3,7 +3,6 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Models;
 using MonoGame_Snake.Models;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace MonoGame_Snake
 {
@@ -60,7 +59,9 @@ namespace MonoGame_Snake
         private void SetTextures()
         {
             _snake.TextureBody = Content.Load<Texture2D>("snakeBodyOk"); 
-            _snake.TextureHead = Content.Load<Texture2D>("snakeHeadOk"); 
+            _snake.TextureHead = Content.Load<Texture2D>("snakeHeadOk");
+            _snake.TextureTail = Content.Load<Texture2D>("snakeTail");
+            _snake.TextureBodyCorner = Content.Load<Texture2D>("snakeCorner");
             _food.Texture = Content.Load<Texture2D>("foodOk");
         }
 
@@ -87,7 +88,7 @@ namespace MonoGame_Snake
                 _snake.Move(_bannerSize);
                 //Validate if food was eaten
                 //var adjustedFoodPosition = new Vector2(_food.Position.X + _snake.BodySize, _food.Position.Y + +_snake.BodySize);
-                if (_snake.Position == _food.Position)
+                if (_snake.PositionHead == _food.Position)
                 {
                     _food.Position = _snake.RandomPositionWithoutSnake(_bannerSize);
                     _snake.Length++;

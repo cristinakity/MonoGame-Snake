@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework.Input;
 using MonoGame_Snake.Enums;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace MonoGame_Snake.Models
 {
@@ -11,21 +12,21 @@ namespace MonoGame_Snake.Models
     public class Snake
     {
         private readonly Core _core;
-        private Vector2 _position;
+        private Vector2 _positionHead;
         private Texture2D? _textureBody;
         private int _length;
 
         public Direction Direction { get; set; } = Direction.Right;
 
-        public Vector2 Position
+        public Vector2 PositionHead
         {
-            get => _position;
+            get => _positionHead;
             set
             {
-                _position = value;
+                _positionHead = value;
                 if (IsInvalidPosition(value))
                 {
-                    _position = AdjustToAValidPosition(value);
+                    _positionHead = AdjustToAValidPosition(value);
                 }
             }
         }
@@ -40,6 +41,11 @@ namespace MonoGame_Snake.Models
 
         public Texture2D? TextureHead {get;set;}
 
+        public Texture2D? TextureTail { get; set; }
+
+        public Texture2D? TextureBodyCorner { get; set; }
+
+
         public int Length
         {
             get => _length;
@@ -50,9 +56,9 @@ namespace MonoGame_Snake.Models
                 {
                     _length = 1;
                 }
-                if(Body is not null)
+                if(BodyParts is not null)
                 {
-                    var newPositions = GetNewPosition(Body[0]);
+                    var newPositions = GetNewPosition(BodyParts[0].CurrentPosition);
                     //Add the new position to the body of the snake, at the beginning of the snake
                     AddNewPosition(newPositions);
                     if (Speed > 0.0f)
@@ -63,8 +69,9 @@ namespace MonoGame_Snake.Models
 
             }
         }
+        
 
-        public List<Vector2> Body { get; set; }
+        public List<BodyPart> BodyParts { get; set; }
 
         public int BodySize { get; set; } = 50;
 
@@ -74,22 +81,36 @@ namespace MonoGame_Snake.Models
             _core = core;
             Speed = 0.5f;
             Length = 1;
-            Body = new List<Vector2>();
+            BodyParts = new List<BodyPart>();
             //Set the initial position of the snake in the middle of the screen use Vector2Extensions
             var x = _core.Graphics.PreferredBackBufferWidth / 2;
             var y = _core.Graphics.PreferredBackBufferHeight / 2;
-            Position = new Vector2(x, y);
-            Body.Add(Position);
+            PositionHead = new Vector2(x, y);
+
+            BodyPart head = new BodyPart(
+                BodyPartType.Head,
+                Direction.Right, //On Start, head faces right
+                PositionHead
+                );         
+
+            BodyParts.Add(head);
         }
 
         private void AddNewPosition(Vector2 position)
         {
-            Body.Insert(0, position);
+            BodyPart newHead = new BodyPart(
+                BodyPartType.Head,
+                BodyParts[0].SpriteDirection,
+                position
+                );
+            
+
+            BodyParts.Insert(0, newHead);           
         }
 
         public void ShowPosition(SpriteFont font, float scale, Vector2 position)
         {
-            _core.SpriteBatch?.DrawString(font, $"Snake x={Position.X} y={Position.Y} (x={Body[0].X},y={Body[0].Y})", position, Color.Black, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+            _core.SpriteBatch?.DrawString(font, $"Snake x={PositionHead.X} y={PositionHead.Y} (x={BodyParts[0].CurrentPosition.X},y={BodyParts[0].CurrentPosition.Y})", position, Color.Black, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
         }
 
         public void ShowSpeed(SpriteFont font, float scale, Vector2 position)
@@ -123,17 +144,27 @@ namespace MonoGame_Snake.Models
         public void Move(int bannerSize)
         {
             // Don't move if the position is the edge of the screen
-            if (IsOnTheLimit(Position, bannerSize))
+            if (IsOnTheLimit(PositionHead, bannerSize))
             {
                 return;
             }
-            var newHeadPosition = GetNewPosition(Body[0]);
-            Position = newHeadPosition;
-            Body.Insert(0, Position);
+            var newHeadPosition = GetNewPosition(BodyParts[0].CurrentPosition);
+            PositionHead = newHeadPosition;
+         
+
+            BodyPart newHead = new BodyPart(
+                BodyPartType.Head,
+                Direction,
+                PositionHead
+                );
+
+            BodyParts.Insert(0, newHead);          
+
+
             //Delete last part of the snake
-            if (Body.Count > Length)
+            if (BodyParts.Count > Length)
             {
-                Body.RemoveAt(Body.Count - 1);
+                BodyParts.RemoveAt(BodyParts.Count - 1);
             }
         }
 
@@ -190,11 +221,60 @@ namespace MonoGame_Snake.Models
             return newPosition;
         }
 
-        public void Draw()
+        private Texture2D AssignCorrectTextureToBodyPart(int currentIndex, ref BodyPart bodyPart)
         {
-            foreach (var part in Body)
+            bodyPart.SpriteCornerIsCCW = true;
+
+            if (currentIndex == 0)
             {
-                var texture = part == Body[0] ? TextureHead : TextureBody;
+                bodyPart.TypeOfBody = BodyPartType.Head;
+                return TextureHead;
+            }
+
+            if (currentIndex == BodyParts.Count - 1)
+            {
+                bodyPart.TypeOfBody = BodyPartType.Tail;
+                return TextureTail;
+            }
+                    
+            bodyPart.TypeOfBody = BodyPartType.Body;
+
+            if (bodyPart.SpriteDirection != BodyParts[currentIndex - 1].SpriteDirection)
+            {
+                //Since we dont block the snake from changing to inverse directions (ex: from left to right, or from up to down, and viceversa)
+                //In those cases, we should not convert the texture to corner
+                if (bodyPart.SpriteDirection == Direction.Up && BodyParts[currentIndex - 1].SpriteDirection == Direction.Down
+                    || bodyPart.SpriteDirection == Direction.Down && BodyParts[currentIndex - 1].SpriteDirection == Direction.Up
+                    || bodyPart.SpriteDirection == Direction.Right && BodyParts[currentIndex - 1].SpriteDirection == Direction.Left
+                    || bodyPart.SpriteDirection == Direction.Left && BodyParts[currentIndex - 1].SpriteDirection == Direction.Right)
+                {
+                    return TextureBody;
+                }
+
+
+                //We get if we are turning ClockWise
+                if (bodyPart.SpriteDirection == Direction.Up && BodyParts[currentIndex - 1].SpriteDirection == Direction.Right
+                    || bodyPart.SpriteDirection == Direction.Right && BodyParts[currentIndex - 1].SpriteDirection == Direction.Down
+                    || bodyPart.SpriteDirection == Direction.Down && BodyParts[currentIndex - 1].SpriteDirection == Direction.Left
+                    || bodyPart.SpriteDirection == Direction.Left && BodyParts[currentIndex - 1].SpriteDirection == Direction.Up)
+                {
+                    bodyPart.SpriteCornerIsCCW = false;
+                }
+
+                return TextureBodyCorner;
+            }
+
+
+            return TextureBody;
+        }
+
+        public void Draw()
+        {           
+            for (int i=0; i< BodyParts.Count; i++)
+            {
+                BodyPart part = BodyParts[i];
+                var texture = AssignCorrectTextureToBodyPart(i,ref part);                            
+                                
 
                 // Calculate the origin as the center of the sprite
                 //Vector2 origin = part;//new Vector2(texture?.Width ?? 1 / 2, texture?.Height ?? 1 / 2);
@@ -214,12 +294,27 @@ namespace MonoGame_Snake.Models
                 // };
                 //Vector2 origin = new Vector2(BodySize/2 + BodySize/4, BodySize/2 + BodySize/4);
 
-                
 
-                // Get the rotation angle based on the direction
-                float rotationAngle = GetRotation();
+                float rotationAngle = 0;
 
-                DrawRectangleCenteredRotation(texture, new Rectangle((int)part.X, (int)part.Y, BodySize, BodySize), Color.White, rotationAngle, false, false);
+
+
+                if (part == BodyParts[0])
+                {
+                    // Get the rotation angle based on the direction. Applicable to BodyType == Head
+                    rotationAngle = GetRotation(Direction);                    
+                }
+                else if(part == BodyParts[BodyParts.Count - 1])
+                { // The tail looks better if it copies the direction of the last bodypart
+                    rotationAngle = GetRotation(BodyParts[i-1].SpriteDirection, part.SpriteCornerIsCCW);
+                }
+                else
+                {
+                    // Get the rotation angle based on the direction. Applicable to BodyType == Body
+                    rotationAngle = GetRotation(part.SpriteDirection, part.SpriteCornerIsCCW);                   
+                }
+
+                DrawRectangleCenteredRotation(texture, new Rectangle((int)part.CurrentPosition.X, (int)part.CurrentPosition.Y, BodySize, BodySize), Color.White, rotationAngle, false, false);
 
                 // Get the flip effect based on the direction
                 //SpriteEffects flipEffect = GetFlipEffect();
@@ -299,16 +394,44 @@ namespace MonoGame_Snake.Models
         //     };
         // }
 
-        private float GetRotation()
+        //private float GetRotation()
+        //{
+        //    return Direction switch
+        //    {
+        //        Direction.Up => MathHelper.ToRadians(270),
+        //        Direction.Down => MathHelper.ToRadians(90),
+        //        Direction.Left => MathHelper.ToRadians(180),
+        //        Direction.Right => MathHelper.ToRadians(0),
+        //        _ => 0f,
+        //    };
+        //}
+
+        private float GetRotation(Direction bodySpriteDirection, bool spriteCornerIsCCW = true)
         {
-            return Direction switch
+            if (spriteCornerIsCCW)
             {
-                Direction.Up => MathHelper.ToRadians(270),
-                Direction.Down => MathHelper.ToRadians(90),
-                Direction.Left => MathHelper.ToRadians(180),
-                Direction.Right => MathHelper.ToRadians(0),
-                _ => 0f,
-            };
+                return bodySpriteDirection switch
+                {
+                    Direction.Up => MathHelper.ToRadians(270),
+                    Direction.Down => MathHelper.ToRadians(90),
+                    Direction.Left => MathHelper.ToRadians(180),
+                    Direction.Right => MathHelper.ToRadians(0),
+                    _ => 0f,
+                };
+            }
+            else
+            {
+                return bodySpriteDirection switch
+                {
+                    Direction.Up => MathHelper.ToRadians(180),
+                    Direction.Down => MathHelper.ToRadians(0),
+                    Direction.Left => MathHelper.ToRadians(90),
+                    Direction.Right => MathHelper.ToRadians(270),
+                    _ => 0f,
+                };
+            }
+
+           
         }
 
         public Vector2 RandomPositionWithoutSnake(int bannerSize)
@@ -316,7 +439,7 @@ namespace MonoGame_Snake.Models
             //Create a random position for the food
             var position = GetRandomPosition(bannerSize);
             //Check if the random position is not in the snake
-            while (Body.Contains(position))
+            while (BodyParts.Any(p => p.CurrentPosition == position))
             {
                 position = GetRandomPosition(bannerSize);
             }
